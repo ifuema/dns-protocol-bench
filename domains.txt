@@ -1,0 +1,34 @@
+# 本文件的域名会被去重、按行顺序循环使用。
+# 为了让"谁快"的结论稳定，请保持这份列表在多次运行之间不变。
+# 想用自己的列表：--domains /path/to/your-domains.txt
+#
+# 选域名建议：国内和国外各放一些。只测国内域名会低估跨境解析的差异，
+# 只测国外域名则会把污染带来的额外开销算进去。
+
+# 国内
+www.baidu.com
+www.qq.com
+www.taobao.com
+www.jd.com
+www.bilibili.com
+www.zhihu.com
+www.aliyun.com
+www.163.com
+www.sina.com.cn
+juejin.cn
+www.cnblogs.com
+www.iqiyi.com
+
+# 国外
+www.google.com
+www.github.com
+www.cloudflare.com
+www.microsoft.com
+www.apple.com
+www.wikipedia.org
+www.amazon.com
+www.reddit.com
+cdn.jsdelivr.net
+cdnjs.cloudflare.com
+fonts.googleapis.com
+www.bing.com

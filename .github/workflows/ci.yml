@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    name: fmt + clippy (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      # aws-lc-sys（rustls 默认的加密后端）要靠 cmake 才能构建，
+      # Linux 上还需要 nasm 编它的汇编。macOS runner 通常自带 cmake，这里补个兜底。
+      - name: 安装 Linux 构建依赖
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake nasm
+
+      - name: 安装 macOS 构建依赖
+        if: runner.os == 'macOS'
+        run: |
+          command -v cmake >/dev/null 2>&1 || brew install cmake
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: 代码格式
+        run: cargo fmt --all -- --check
+
+      - name: Clippy（告警即失败）
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+  msrv:
+    name: MSRV 1.88 构建
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Linux 构建依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake nasm
+
+      # 与 Cargo.toml 里的 rust-version 保持一致：这个 job 存在的意义就是守住它
+      - uses: dtolnay/rust-toolchain@1.88.0
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv
+
+      - name: 用 1.88 构建（失败说明 MSRV 声明不准，需要上调 rust-version）
+        run: cargo build --release --locked

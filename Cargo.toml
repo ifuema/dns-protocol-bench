@@ -1,0 +1,29 @@
+[package]
+name = "dns-protocol-bench"
+version = "0.1.0"
+edition = "2021"
+# 实测出来的真实下限：quinn / hyper-rustls 要 1.85，
+# 而 reqwest → url → idna → icu_* 那一串要 1.88。CI 会用这个版本真跑一次构建来守住它。
+rust-version = "1.88"
+description = "DNS 延迟实测：同一口径下，横比五种协议与主流公共 DNS"
+license = "MIT"
+readme = "README.md"
+keywords = ["dns", "benchmark", "doh", "doq", "latency"]
+categories = ["command-line-utilities", "network-programming"]
+# 有两个可执行文件时，指定默认跑哪一个（不带 --bin 时用 protocol 版）
+default-run = "dns-protocol-bench"
+repository = "https://github.com/ifuema/dns-protocol-bench"
+
+[dependencies]
+quinn = { version = "0.11", default-features = false, features = ["rustls", "runtime-tokio", "log"] }
+rand = "0.8"
+# 注意 http2：不开这个 feature，reqwest 只会用 HTTP/1.1，DoH 就不是"h2"了
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "http2", "http3"] }
+rustls = "0.23"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "time", "io-util"] }
+tokio-rustls = "0.26"
+webpki-roots = "1"
+
+[profile.release]
+# 基准测试关心的是单次延迟，不需要激进优化；保留一点调试符号便于排查 panic
+debug = 1

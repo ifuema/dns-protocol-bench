@@ -1,0 +1,17 @@
+# Rust 构建产物
+/target
+**/*.rs.bk
+*.pdb
+
+# 编辑器 / IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
