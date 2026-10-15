@@ -49,8 +49,8 @@ use std::{
 };
 
 use dns_protocol_bench::{
-    install_crypto_provider, load_domains, next_value, pad_to, Endpoint, Mode, Progress, Proto,
-    Report, Runner, EARLY_ABORT_AFTER, QUERY_TIMEOUT,
+    install_crypto_provider, load_domains, next_value, pad_to, truncate, Endpoint, Mode, Progress,
+    Proto, Report, Runner, EARLY_ABORT_AFTER, QUERY_TIMEOUT,
 };
 use tokio::time;
 
@@ -257,14 +257,30 @@ async fn main() {
             }
         };
 
-        // 预热：建立连接 / 让 reqwest 完成握手，结果全部丢弃
+        // 预热：建立连接 / 让 reqwest 完成握手，结果全部丢弃。
+        // 但要记下预热是否出过问题 —— 预热没建起连接时，热口径其实退化成了冷口径，
+        // 后面的分位数会带上建连成本（与 providers 同一口径）。
+        let mut warmup_note: Option<String> = None;
         for i in 0..opt.warmup {
             progress.stage(&format!("预热 {}/{}", i + 1, opt.warmup));
             let domain = &domains[i % domains.len()];
-            let _ = time::timeout(opt.timeout, runner.exchange(domain, opt.mode)).await;
+            match time::timeout(opt.timeout, runner.exchange(domain, opt.mode)).await {
+                Err(_) => {
+                    if warmup_note.is_none() {
+                        warmup_note = Some(format!("预热就超时（>{:?} 无响应）", opt.timeout));
+                    }
+                }
+                Ok(Err(e)) => {
+                    if warmup_note.is_none() {
+                        warmup_note = Some(format!("预热失败：{}", truncate(&e.summary(), 60)));
+                    }
+                }
+                Ok(Ok(_)) => {}
+            }
         }
 
         let mut report = Report::new(label, label, *proto);
+        report.tally.warmup_note = warmup_note;
         let mut consecutive_failures = 0usize;
 
         for i in 0..opt.rounds {
@@ -377,7 +393,7 @@ async fn main() {
     println!("按 p50 排名（口径：{}）", opt.mode.name());
     for (i, report) in ranked.iter().enumerate() {
         println!(
-            "  {}. {} p50 {:>7.1}  p90 {:>7.1}  max {:>8.1}  mean {:>7.1}  (成功 {}/{}，超时 {})",
+            "  {}. {} p50 {:>7.1}  p90 {:>7.1}  max {:>8.1}  mean {:>7.1}  (成功 {}/{}，超时 {}){}",
             i + 1,
             pad_to(report.label.as_str(), 12),
             report.p50(),
@@ -386,7 +402,12 @@ async fn main() {
             report.mean(),
             report.tally.ok,
             opt.rounds,
-            report.tally.timeout
+            report.tally.timeout,
+            if report.warmup_suspect() {
+                "  ! 预热失败，p50 可能含建连成本"
+            } else {
+                ""
+            }
         );
     }
 

@@ -714,6 +714,7 @@ fn print_matrix(
     println!("  ·  该家没有提供这个协议（也没探测）");
     println!("  ✗  有端点但每次都失败（原因见下面的清单）");
     println!("  ~  该格是 --probe 试行出来的，失败属正常");
+    println!("  !  数字后带 ! = 预热失败过，p50 可能含建连成本而偏高（见下面的清单）");
     println!();
     print!("{}", pad_to("服务商", name_w));
     for p in protos {
@@ -729,10 +730,11 @@ fn print_matrix(
             let text = match found {
                 None => "·".to_owned(),
                 Some(r) if r.has_samples() => {
+                    let warn = if r.warmup_suspect() { "!" } else { "" };
                     if is_spec {
-                        format!("~{:.1}", r.p50())
+                        format!("~{:.1}{}", r.p50(), warn)
                     } else {
-                        format!("{:.1}", r.p50())
+                        format!("{:.1}{}", r.p50(), warn)
                     }
                 }
                 Some(_) => {
@@ -746,6 +748,29 @@ fn print_matrix(
             print!("{}", cell_right(&text, CELL));
         }
         println!();
+    }
+}
+
+/// 有样本、但预热出过问题的组合：矩阵里数字看着正常，最容易被当成真实的热口径成绩。
+/// 全部失败的组合不在这里 —— print_failures 会连同预热告警一起列出。
+fn print_warmup_suspects(reports: &[Report]) {
+    let suspects: Vec<&Report> = reports.iter().filter(|r| r.warmup_suspect()).collect();
+    if suspects.is_empty() {
+        return;
+    }
+
+    println!();
+    println!("──────────────────────────────────────────────────────────────");
+    println!("预热失败但有样本的组合（矩阵里带 !，p50 可能含建连成本而偏高）");
+    for r in suspects {
+        println!(
+            "  {}  p50 {:>7.1}  成功 {}/{}  ⚠️ {}",
+            pad_to(r.label.as_str(), 34),
+            r.p50(),
+            r.tally.ok,
+            r.tally.attempts(),
+            r.tally.warmup_note.as_deref().unwrap_or_default()
+        );
     }
 }
 
@@ -829,7 +854,7 @@ fn print_protocol_rankings(reports: &[Report], protos: &[Proto], rounds: usize) 
         let best = group[0].p50();
         for (i, r) in group.iter().enumerate() {
             println!(
-                "  {}. {} p50 {:>7.1}  (+{:>5.1})  p90 {:>7.1}  max {:>8.1}  成功 {}/{}",
+                "  {}. {} p50 {:>7.1}  (+{:>5.1})  p90 {:>7.1}  max {:>8.1}  成功 {}/{}{}",
                 i + 1,
                 pad_to(&r.group, 20),
                 r.p50(),
@@ -837,7 +862,12 @@ fn print_protocol_rankings(reports: &[Report], protos: &[Proto], rounds: usize) 
                 r.p90(),
                 r.max(),
                 r.tally.ok,
-                rounds
+                rounds,
+                if r.warmup_suspect() {
+                    "  ! 预热失败"
+                } else {
+                    ""
+                }
             );
         }
         println!();
@@ -1048,6 +1078,7 @@ async fn main() {
     }
 
     print_matrix(&reports, &providers, &opt.protos, &speculative);
+    print_warmup_suspects(&reports);
     print_failures(&reports, opt.timeout);
     print_protocol_rankings(&reports, &opt.protos, opt.rounds);
     print_provider_bests(&reports);
