@@ -799,6 +799,12 @@ impl Report {
         !self.samples.is_empty()
     }
 
+    /// 预热出过问题、正式查询却拿到了样本：数字看着正常，但热口径下可能含建连成本。
+    /// 一个样本都没有的组合不算 —— 它们已经在失败清单里带着预热告警了。
+    pub fn warmup_suspect(&self) -> bool {
+        self.has_samples() && self.tally.warmup_note.is_some()
+    }
+
     /// 一行摘要，给"实时进度"的常驻记录用
     pub fn summary_line(&self, rounds: usize, name_width: usize) -> String {
         let name = fit(&self.label, name_width);
@@ -845,6 +851,16 @@ impl Report {
         }
         if let Some(detail) = &self.tally.first_error {
             println!("   首条错误：{}", detail);
+        }
+        if let Some(note) = &self.tally.warmup_note {
+            if self.warmup_suspect() {
+                println!(
+                    "   ⚠️ {} —— 连接可能没在预热里建起来，下面的分位数可能含建连成本",
+                    note
+                );
+            } else {
+                println!("   ⚠️ {}", note);
+            }
         }
         if self.samples.is_empty() {
             println!("   （没有成功样本，无法统计分位数）");
@@ -953,6 +969,15 @@ impl Progress {
         if !self.quiet {
             eprintln!("{}", summary);
         }
+    }
+
+    /// 收尾当前目标，但这条结果属于**报告正文**：擦掉进度行后写到 stdout。
+    /// 和 `finish` 不同，`--no-progress` 也照打（关的只是进度，不是报告），
+    /// `> out.txt` 时也会进文件，而不是漏在终端上。
+    pub fn finish_report(&mut self, line: &str, elapsed: Duration) {
+        self.spent += elapsed;
+        self.clear();
+        println!("{}", line);
     }
 
     /// 全部跑完：擦掉进度行，报总耗时
