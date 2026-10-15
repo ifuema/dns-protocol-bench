@@ -955,6 +955,15 @@ impl Progress {
         }
     }
 
+    /// 收尾当前目标，但这条结果属于**报告正文**：擦掉进度行后写到 stdout。
+    /// 和 `finish` 不同，`--no-progress` 也照打（关的只是进度，不是报告），
+    /// `> out.txt` 时也会进文件，而不是漏在终端上。
+    pub fn finish_report(&mut self, line: &str, elapsed: Duration) {
+        self.spent += elapsed;
+        self.clear();
+        println!("{}", line);
+    }
+
     /// 全部跑完：擦掉进度行，报总耗时
     pub fn done(&mut self) {
         self.clear();

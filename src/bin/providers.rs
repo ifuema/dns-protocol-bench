@@ -1100,7 +1100,7 @@ async fn main() {
                         truncate(&e.summary(), 60)
                     );
                     hprog.begin(provider);
-                    hprog.finish(&line, Duration::ZERO);
+                    hprog.finish_report(&line, Duration::ZERO);
                     continue;
                 }
             };
@@ -1180,15 +1180,16 @@ async fn main() {
                     format!("❌ 全部查不通：{}", first_problem.unwrap_or_default())
                 };
 
-                // 用 finish 而不是 println!：TTY 下会把进度行原地替换成这条结果，
-                // 非 TTY 下就是一行普通输出，两种情形都不会出现残缺的半行
+                // 用 finish_report 而不是裸 println!：先擦掉 stderr 上的进度行再写 stdout，
+                // TTY 下不会留下残缺的半行；结论本身是报告正文，所以不走 finish（stderr，
+                // --no-progress 时还会被吞掉），重定向和 --no-progress 下都能拿到完整结论
                 let line = format!(
                     "  {} {} {}",
                     pad_to(provider, 30),
                     pad_to(base, 14),
                     verdict
                 );
-                hprog.finish(&line, task_started.elapsed());
+                hprog.finish_report(&line, task_started.elapsed());
                 runner.close();
             }
         }
